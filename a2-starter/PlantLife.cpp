@@ -212,6 +212,8 @@ void RenderSurfaceGrid(void)
  //       Don't forget to specify the normal at each vertex. Otherwise
  //       your surface won't be properly illuminated
  /////////////////////////////////////////////////////////////////////////
+
+  
 }
 
 void MakeSurfaceGrid(void)
@@ -556,7 +558,7 @@ struct PlantNode *MakePlant(void)
   p_root->scl=.8+(.2*drand48());                                 // Initial scale (defines the size
                                                                  // of the largest component).
   p_root->left=NULL;
-  p_root->left=NULL;
+  p_root->right=NULL;
 
   // Generative part, use the laws above to generate up to two children for each node in the tree
   GenerateRecursivePlant(p_root,1);  // Level 0 is the root, next level is 1
