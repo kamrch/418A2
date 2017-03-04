@@ -212,8 +212,46 @@ void RenderSurfaceGrid(void)
  //       Don't forget to specify the normal at each vertex. Otherwise
  //       your surface won't be properly illuminated
  /////////////////////////////////////////////////////////////////////////
-
   
+  //Divide grids into 2 triangls instead of QUADS for flatness
+
+  //** TODO: add colours
+  for (int i = 0; i < GRID_RESOLVE -1 ; i++){
+    for (int j = 0; j < GRID_RESOLVE-1; j++){
+        //first triangle at bottom left
+        glBegin(GL_TRIANGLES);
+          
+          glColor3f(0.5f, 0.35f, 0.05f);
+
+          glNormal3f(GroundNormals[i][j][0], GroundNormals[i][j][1], GroundNormals[i][j][2]);
+          glVertex3f(GroundXYZ[i][j][0], GroundXYZ[i][j][1],GroundXYZ[i][j][2]);
+
+          glNormal3f(GroundNormals[i+1][j][0], GroundNormals[i+1][j][1], GroundNormals[i+1][j][2]);
+          glVertex3f(GroundXYZ[i+1][j][0], GroundXYZ[i+1][j][1],GroundXYZ[i+1][j][2]);   
+
+          glNormal3f(GroundNormals[i+1][j+1][0], GroundNormals[i+1][j+1][1], GroundNormals[i+1][j+1][2]);
+          glVertex3f(GroundXYZ[i+1][j+1][0], GroundXYZ[i+1][j+1][1],GroundXYZ[i+1][j+1][2]);        
+
+        glEnd();
+        //second triangle at top right
+        glBegin(GL_TRIANGLES);
+
+          //different brown
+          glColor3f(0.7f, 0.2f, 0.1f);
+
+          glNormal3f(GroundNormals[i][j][0], GroundNormals[i][j][1], GroundNormals[i][j][2]);
+          glVertex3f(GroundXYZ[i][j][0], GroundXYZ[i][j][1],GroundXYZ[i][j][2]);
+
+          glNormal3f(GroundNormals[i][j+1][0], GroundNormals[i][j+1][1], GroundNormals[i][j+1][2]);
+          glVertex3f(GroundXYZ[i][j+1][0], GroundXYZ[i][j+1][1],GroundXYZ[i][j+1][2]);
+
+          glNormal3f(GroundNormals[i+1][j+1][0], GroundNormals[i+1][j+1][1], GroundNormals[i+1][j+1][2]);
+          glVertex3f(GroundXYZ[i+1][j+1][0], GroundXYZ[i+1][j+1][1],GroundXYZ[i+1][j+1][2]);        
+
+        glEnd();
+    }
+  }
+
 }
 
 void MakeSurfaceGrid(void)
@@ -239,7 +277,7 @@ void MakeSurfaceGrid(void)
  //       The normals are stored in GroundNormals[][][]
  //
  //       NOTE: when you assign locations to the plants in your forest,
- //             make sure the pant's root location agrees with the
+ //             make sure the plant's root location agrees with the
  //             surface height at the point where it is rooted.
  //             We don't want plants sinking into the ground!
  /////////////////////////////////////////////////////////////////////////
@@ -254,8 +292,10 @@ void MakeSurfaceGrid(void)
   {
    GroundXYZ[i][j][0]=(-side*.5)+(i*(side/GRID_RESOLVE));
    GroundXYZ[i][j][1]=(-side*.5)+(j*(side/GRID_RESOLVE));
-   GroundXYZ[i][j][2]=0;	// <----- HERE you must define surface height in some smart way!
+   // sine and cosine graph but with taller and sparse slopes
+   GroundXYZ[i][j][2]=(sin(0.17*j)*1.5) + (sin(0.17*i)*1.5);	// <----- HERE you must define surface height in some smart way!
   }
+  
 
  // Compute normals at each vertex
  // Remember we talked about how to compute the normal for a triangle in lecture. You
@@ -268,14 +308,36 @@ void MakeSurfaceGrid(void)
   for (int j=0; j<GRID_RESOLVE; j++)
   {
    // Obtain two vectors on the surface the point at GroundXYZ[i][j][] is located
+    //Check if i or j is at along the borders
+    int border_i = 1;
+    int border_j = 1;
+    if (i == GRID_RESOLVE-1){
+      //i is at the border
+      border_i = -1;
+    }
+    if (j == GRID_RESOLVE-1){
+      //j is at the border
+      border_j=-1;
+    }
+
+    //Use borderi and borderj above to compute v and w, where borderi/j has
+    //taken all cases into account.
+    vx = GroundXYZ[i+border_i][j][0] - GroundXYZ[i][j][0];
+    vy = GroundXYZ[i+border_i][j][1] - GroundXYZ[i][j][1];
+    vz = GroundXYZ[i+border_i][j][2] - GroundXYZ[i][j][2];
+
+    wx = GroundXYZ[i][j+border_j][0] - GroundXYZ[i][j][0];
+    wy = GroundXYZ[i][j+border_j][1] - GroundXYZ[i][j][1];
+    wz = GroundXYZ[i][j+border_j][2] - GroundXYZ[i][j][2];
 
    // Then compute the normal
    computeNormal(&vx,&vy,&vz,wx,wy,wz);
 
    // And store it...
-   GroundNormals[i][j][0]=0;    // <----- HEY!
-   GroundNormals[i][j][1]=0;    // <----- REPLACE THESE COMPONENTS with the correct
-   GroundNormals[i][j][2]=1;    // <----- normal for your surface!
+   GroundNormals[i][j][0]=vx;    // <----- HEY!
+   GroundNormals[i][j][1]=vy;    // <----- REPLACE THESE COMPONENTS with the correct
+   GroundNormals[i][j][2]=vz;    // <----- normal for your surface!
+   //Replaced ^
   }
 }
 
@@ -311,7 +373,48 @@ void RenderPlant(struct PlantNode *p)
  //       else your plant will look 'dried up'.
  ////////////////////////////////////////////////////////////
 
- if (p==NULL) return;		// Avoid crash if called with empty node
+  if (p==NULL) return;		// Avoid crash if called with empty node
+
+  // push matrix to reset
+  glPushMatrix();
+
+  if (p->type != NULL){
+    //transformations before calling StemSection
+    glRotatef(p->x_ang, 1, 0, 0);
+    glRotatef(p->z_ang, 0, 0, 1);
+    glScalef(p->scl, p->scl, p->scl);
+  }
+
+  //Stem
+  if ((p->type == 'a') || (p->type == 'b')){
+    
+
+    StemSection();
+
+
+  } else if (p->type == 'c'){
+    //Leaf
+
+    
+
+    LeafSection(); 
+  } else if (p->type == 'd'){
+    //Flower
+
+    
+    FlowerSection();
+  }
+
+
+  //left children node
+  glPushMatrix();
+  RenderPlant(p->left);
+  glPopMatrix();
+  //right children node
+  glPushMatrix();
+  RenderPlant(p->right);
+  glPopMatrix();
+
 }
 
 void StemSection(void)
