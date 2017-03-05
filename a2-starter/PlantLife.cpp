@@ -71,6 +71,13 @@ struct PlantNode{
 
   // QUESTION: We don't have a translation component... WHY?
 
+  /*
+  ANS: We don't need a translation component because the plant node's location will be 
+      randomized before drawing and rendering, therefore each plant has its own drawing
+      point and do not require a translation component to move its location.
+
+  */
+
   // NOTE: We don't have pointers to the parents. Make sure your drawing function knows what
   // it's doing!
 };
@@ -109,6 +116,7 @@ GLint n_levels;       // Number of levels of branching in the plant
 GLint n_plants;	      // Number of plants in a plant forest in [1,MAX_PLANTS]
 
 // Transition probabilities for the L-system specification
+GLfloat Paaa;
 GLfloat Paab;
 GLfloat Paac;
 GLfloat Paad;
@@ -116,6 +124,9 @@ GLfloat Pacd;
 GLfloat Pba;
 GLfloat Pbc;
 GLfloat Pbd;
+
+//Global variable to store plants location
+int plants_loc[GRID_RESOLVE][GRID_RESOLVE];
 
 /******************************************************************************
   Function Prototypes
@@ -142,6 +153,8 @@ void printNodeRecursive(struct PlantNode *p, int lev, int tgt);
 void RenderPlant(struct PlantNode *p);
 void StemSection();
 void LeafSection();
+void FlowerStemSection();
+void FlowerBudSection();
 void FlowerSection();
 void AnimatedRenderPlant(void);
 
@@ -215,13 +228,17 @@ void RenderSurfaceGrid(void)
   
   //Divide grids into 2 triangls instead of QUADS for flatness
 
-  //** TODO: add colours
+
   for (int i = 0; i < GRID_RESOLVE -1 ; i++){
     for (int j = 0; j < GRID_RESOLVE-1; j++){
         //first triangle at bottom left
+          // Ground dirt colour
+          // glColor3f(0.6f, 0.4f, 0.2f);
+
+        //green
+        glColor3f(0.33f, 0.5f, 0);
         glBegin(GL_TRIANGLES);
           
-          glColor3f(0.5f, 0.35f, 0.05f);
 
           glNormal3f(GroundNormals[i][j][0], GroundNormals[i][j][1], GroundNormals[i][j][2]);
           glVertex3f(GroundXYZ[i][j][0], GroundXYZ[i][j][1],GroundXYZ[i][j][2]);
@@ -234,10 +251,10 @@ void RenderSurfaceGrid(void)
 
         glEnd();
         //second triangle at top right
+          //green
+          glColor3f(0.33f, 0.5f, 0);
         glBegin(GL_TRIANGLES);
 
-          //different brown
-          glColor3f(0.7f, 0.2f, 0.1f);
 
           glNormal3f(GroundNormals[i][j][0], GroundNormals[i][j][1], GroundNormals[i][j][2]);
           glVertex3f(GroundXYZ[i][j][0], GroundXYZ[i][j][1],GroundXYZ[i][j][2]);
@@ -287,13 +304,17 @@ void MakeSurfaceGrid(void)
  // Assign surface heights
  side=15;				// Width of the surface - X and Y coordinates
 					// will have values in [-side/2, side/2]
+
+
  for (int i=0; i<GRID_RESOLVE; i++)
   for (int j=0; j<GRID_RESOLVE; j++)
   {
-   GroundXYZ[i][j][0]=(-side*.5)+(i*(side/GRID_RESOLVE));
-   GroundXYZ[i][j][1]=(-side*.5)+(j*(side/GRID_RESOLVE));
-   // sine and cosine graph but with taller and sparse slopes
-   GroundXYZ[i][j][2]=(sin(0.17*j)*1.5) + (sin(0.17*i)*1.5);	// <----- HERE you must define surface height in some smart way!
+    GroundXYZ[i][j][0]=(-side*.5)+(i*(side/GRID_RESOLVE));
+    GroundXYZ[i][j][1]=(-side*.5)+(j*(side/GRID_RESOLVE));
+    // sine and cosine graph but with taller and sparse slopes
+    GroundXYZ[i][j][2]=(sin(0.17*j)*1.2) + (sin(0.17*i)*1.2);  // <----- HERE you must define surface height in some smart way!
+    // Initialize the plants_loc array as well
+    plants_loc[i][j]=0;
   }
   
 
@@ -373,36 +394,32 @@ void RenderPlant(struct PlantNode *p)
  //       else your plant will look 'dried up'.
  ////////////////////////////////////////////////////////////
 
-  if (p==NULL) return;		// Avoid crash if called with empty node
-
-  // push matrix to reset
-  glPushMatrix();
-
-  if (p->type != NULL){
-    //transformations before calling StemSection
-    glRotatef(p->x_ang, 1, 0, 0);
-    glRotatef(p->z_ang, 0, 0, 1);
-    glScalef(p->scl, p->scl, p->scl);
+  if (p==NULL){
+    return;   // Avoid crash if called with empty node
   }
-
   //Stem
   if ((p->type == 'a') || (p->type == 'b')){
     
+    // glPushMatrix();    
+    glRotatef(p->x_ang, 1, 0, 0);
+    glRotatef(p->z_ang, 0, 0, 1);
+    glScalef(p->scl, p->scl, p->scl);
+    // glPopMatrix();
 
+    glColor3f(0,1.0f,0);
     StemSection();
-
-
+    glTranslatef(0,0,1.0);
+    
   } else if (p->type == 'c'){
     //Leaf
-
-    
-
     LeafSection(); 
+
   } else if (p->type == 'd'){
     //Flower
-
-    
+    //Flower structure: stem + petals + bud
+    FlowerStemSection();
     FlowerSection();
+    FlowerBudSection();
   }
 
 
@@ -437,9 +454,11 @@ void LeafSection(void)
 {
  // Draws a single leaf, along the current local Z axis
  // Note that we draw a little stem before the actual leaf.
- glColor3f(.25,1,.1);
+  glPushMatrix();
+ glColor3f(0,1.0f,0);
  StemSection();
  // Perhaps you should translate now? :)
+ glTranslatef(0, 0, 1);
 
  ////////////////////////////////////////////////////////////
  // TO DO: Draw your own leaf design.
@@ -491,16 +510,117 @@ void LeafSection(void)
  }
 
  ///////////////////////////////////////////////////////////
- // DO YOUR DRAWING WORK HERE!!!!
+ // DO YOUR DRAWING WORK HERE!!!!//WHY ARE WE YELLING
  ///////////////////////////////////////////////////////////
+ 
+ glRotatef(60, 0, 0, 1);
+  glNormal3f(0,0,1); //z-axis normal
+  glScalef(0.2, 0.2, 0.2);
+  glBegin(GL_POLYGON); //Such leaf
+    glVertex3f(0,0,0);
+    glVertex3f(1.0,-0.7, 0);
+    glVertex3f(1.3,-1.8, -0.3);
+    glVertex3f(0.8,-2.8, -0.5);
+    glVertex3f(0.0,-3.8, -1);
+    glVertex3f(-0.8,-2.8, -0.5);
+    glVertex3f(-1.3,-1.8, -0.3);
+    glVertex3f(-1.0,-0.7, 0);
+  glEnd();  //Very beautiful leaf
+    // Border outline for the first petal
+  glColor3f(0,0,0);
+  glBegin(GL_LINE_LOOP);
+    glVertex3f(0,0,0);
+    glVertex3f(1.0,-0.7, 0);
+    glVertex3f(1.3,-1.8, -0.3);
+    glVertex3f(0.8,-2.8, -0.5);
+    glVertex3f(0.0,-3.8, -1);
+    glVertex3f(-0.8,-2.8, -0.5);
+    glVertex3f(-1.3,-1.8, -0.3);
+    glVertex3f(-1.0,-0.7, 0);
+  glEnd();
 
- // Disable texture mapping
- if (textures_on)
- {
-  glDisable(GL_CULL_FACE);
-  glDisable(GL_TEXTURE_2D);
-  glDisable (GL_BLEND);
- }
+  glRotatef(270, 0, 0, 1);
+  // StemSection();
+  glColor3f(0,1.0f,0);
+  //slight offset at z so the first leave don't go into the other.
+  glTranslatef(0,0,0.155f);
+  glBegin(GL_POLYGON); // so beautiful there needs to be 1 more
+    glVertex3f(0,0,0);
+    glVertex3f(1.0,-0.7, 0);
+    glVertex3f(1.3,-1.8, -0.3);
+    glVertex3f(0.8,-2.8, -0.5);
+    glVertex3f(0.0,-3.8, -1);
+    glVertex3f(-0.8,-2.8, -0.5);
+    glVertex3f(-1.3,-1.8, -0.3);
+    glVertex3f(-1.0,-0.7, 0);
+  glEnd();
+
+  // Border outline for the 2nd petal
+  glColor3f(0,0,0);
+  glBegin(GL_LINE_LOOP);
+    glVertex3f(0,0,0);
+    glVertex3f(1.0,-0.7, 0);
+    glVertex3f(1.3,-1.8, -0.3);
+    glVertex3f(0.8,-2.8, -0.5);
+    glVertex3f(0.0,-3.8, -1);
+    glVertex3f(-0.8,-2.8, -0.5);
+    glVertex3f(-1.3,-1.8, -0.3);
+    glVertex3f(-1.0,-0.7, 0);
+  glEnd();
+
+
+  // Disable texture mapping
+  if (textures_on)
+  {
+    glDisable(GL_CULL_FACE);
+    glDisable(GL_TEXTURE_2D);
+    glDisable (GL_BLEND);
+  }
+  glPopMatrix();
+}
+
+// Add a stem for the flower just as StemSection
+void FlowerStemSection(){
+  glPushMatrix();
+  glColor3f(0, 1.0f, 0);
+  glTranslatef(0, 0, 0.95);
+  glScalef(0.5, 0.5, 0.5);
+  //A bit more stem
+
+  GLUquadric *more_stem;
+  more_stem=gluNewQuadric();
+  gluCylinder(more_stem,.05,.04,0.5,10,10);
+  gluDeleteQuadric(more_stem);  
+  glTranslatef(0,0,0.5);
+  //connecting part between stem and petals
+  GLUquadric *connection;
+  connection=gluNewQuadric();
+  gluCylinder(connection,0.04,0.4,0.2,10,10);
+  gluDeleteQuadric(connection);  
+  glPopMatrix();
+
+}
+
+// Add a bud for the flower just as StemSection
+void FlowerBudSection(){
+  glPushMatrix();
+  glColor3f(.3f,.15f,0.1f);
+  //move circle to be above padal
+  glTranslatef(0, 0, 1.34);
+
+  // Draw a circle using GL_TRIANGLE_FAN as bud. Codes taken online from:
+  //https://gist.github.com/strife25/803118
+  int triangle_num = 20;
+  GLfloat ii = 2.0f * PI;
+  GLfloat radius = 0.2;
+
+  glBegin(GL_TRIANGLE_FAN);
+    for (int i = 0; i <= triangle_num; i++){
+      glVertex2f(radius * cos(i* ii  / triangle_num), radius * sin(i * ii / triangle_num));
+    }
+  glEnd();
+
+  glPopMatrix();
 
 }
 
@@ -548,6 +668,67 @@ void FlowerSection()
  /////////////////////////////////////////////////////////////
  // DO YOUR DRAWING WORK HERE!!
  /////////////////////////////////////////////////////////////
+  glPushMatrix();
+  
+  float petal_height = 3.3;
+  glNormal3f(0, 0, 1); //z-axis normal
+  glScalef(0.4, 0.4, 0.4);  
+  for (int i=0; i <8; i++){
+    float petal_z_offset = 0;
+    // Hardcode iteration numbers to increment the offset
+    // to create 2 layer of petals.
+    if (i==1 || i==2 || i ==6 || i ==5){
+      petal_z_offset = 0.03;
+    }
+    glRotatef(45*i, 0, 0, 1); 
+    glColor3f(1.0f,1.0f,.1f);
+    glBegin (GL_POLYGON); 
+      glVertex3f(0.0,0.0,petal_height+petal_z_offset);
+
+      glVertex3f(0.18,0.3,petal_height+petal_z_offset);
+      glVertex3f(0.22,0.5,petal_height+petal_z_offset);
+      glVertex3f(0.27,0.7,petal_height+petal_z_offset);
+      glVertex3f(0.23,0.85,petal_height+petal_z_offset);
+      glVertex3f(0.18,0.9,petal_height+petal_z_offset);
+      glVertex3f(0.15,1,petal_height+petal_z_offset);
+      glVertex3f(0.05,1.1,petal_height+petal_z_offset-0.03);
+
+      
+      glVertex3f(0.0,1.2,petal_height+petal_z_offset-0.05);
+
+      glVertex3f(-0.05,1.1,petal_height+petal_z_offset-0.03);
+      glVertex3f(-0.15,1,petal_height+petal_z_offset);
+      glVertex3f(-0.18,0.9,petal_height+petal_z_offset);
+      glVertex3f(-0.23,0.85,petal_height+petal_z_offset);
+      glVertex3f(-0.27,0.7,petal_height+petal_z_offset);
+      glVertex3f(-0.22,0.5,petal_height+petal_z_offset);
+      glVertex3f(-0.18,0.3,petal_height+petal_z_offset);
+    glEnd();
+
+    // Border outline for the petals
+    glColor3f(0,0,0);
+    glBegin(GL_LINE_LOOP);
+
+      glVertex3f(0.18,0.3,petal_height+petal_z_offset);
+      glVertex3f(0.22,0.5,petal_height+petal_z_offset);
+      glVertex3f(0.27,0.7,petal_height+petal_z_offset);
+      glVertex3f(0.23,0.85,petal_height+petal_z_offset);
+      glVertex3f(0.18,0.9,petal_height+petal_z_offset);
+      glVertex3f(0.15,1,petal_height+petal_z_offset);
+      glVertex3f(0.05,1.1,petal_height+petal_z_offset-.03);
+
+      glVertex3f(0.0,1.2,petal_height+petal_z_offset-0.05);
+
+      glVertex3f(-0.05,1.1,petal_height+petal_z_offset-.03);
+      glVertex3f(-0.15,1,petal_height+petal_z_offset);
+      glVertex3f(-0.18,0.9,petal_height+petal_z_offset);
+      glVertex3f(-0.23,0.85,petal_height+petal_z_offset);
+      glVertex3f(-0.27,0.7,petal_height+petal_z_offset);
+      glVertex3f(-0.22,0.5,petal_height+petal_z_offset);
+      glVertex3f(-0.18,0.3,petal_height+petal_z_offset);
+    glEnd();
+    
+  }
 
  // Disable texture mapping
  if (textures_on)
@@ -556,6 +737,7 @@ void FlowerSection()
   glDisable(GL_TEXTURE_2D);
   glDisable (GL_BLEND);
  }
+ glPopMatrix();
 }
 
 void FreePlant(struct PlantNode *p)
@@ -692,6 +874,44 @@ void GenerateRecursivePlant(struct PlantNode *p, int level)
    //        for 'b' type nodes, and you can look at that code
    //        to give you an idea how the process works.
    ///////////////////////////////////////////////////////////// 
+    // Generate nodes for both left and right
+    q=(struct PlantNode *)calloc(1,sizeof(struct PlantNode));
+    q->x_ang=drand48()*X_angle;
+    q->z_ang=drand48()*Z_angle;
+    q->scl=scale_mult;
+    q->left=NULL;
+    q->right=NULL; 
+
+    r=(struct PlantNode *)calloc(1,sizeof(struct PlantNode));
+    r->x_ang=drand48()*X_angle;
+    r->z_ang=drand48()*Z_angle;
+    r->scl=scale_mult;
+    r->left=NULL;
+    r->right=NULL;
+    if (dice<=Paaa){
+      // Selected rule a -> aa
+      q->type='a';
+      r->type='a';
+    } else if (dice<=(Paaa+Paab)) {
+    // Selected rule a -> ab
+      q->type='a';
+      r->type='b';
+    } else if (dice<=(Paaa+Paab+Paac)){
+      // Selected rule a -> ac with p = Paac
+      q->type='a';
+      r->type='c';
+
+    } else if (dice<=(Paaa+Paab+Paac+Paad)){
+      // Selected rule a -> ad with p = Paad
+
+    } else {
+      // Remaining rule a -> cd with p = Pacd
+      q->type='c';
+      r->type='d';
+    }
+
+    //End of (p->type =a a) case
+
   }
   else if (p->type=='b')
   {
@@ -747,8 +967,8 @@ int main(int argc, char** argv)
  */
 
     // Process program arguments
-    if(argc != 15) {
-        printf("Usage: PlantLife n_plants n_levels X_angle Z_angle scale_mult Paab Paac Paad Pacd Pba Pbc Pbd width height\n");
+    if(argc != 16) {
+        printf("Usage: PlantLife n_plants n_levels X_angle Z_angle scale_mult Paaa Paab Paac Paad Pacd Pba Pbc Pbd width height\n");
         exit(1);
     } else {
         n_plants=atoi(argv[1]);
@@ -757,14 +977,15 @@ int main(int argc, char** argv)
         Z_angle=atof(argv[4]);
         scale_mult=atof(argv[5]);
         Paab=atof(argv[6]);
-        Paac=atof(argv[7]);
-        Paad=atof(argv[8]);
-        Pacd=atof(argv[9]);
-        Pba=atof(argv[10]);
-        Pbc=atof(argv[11]);
-        Pbd=atof(argv[12]);
-        Win[0] = atoi(argv[13]);
-        Win[1] = atoi(argv[14]);
+        Paab=atof(argv[7]);
+        Paac=atof(argv[8]);
+        Paad=atof(argv[9]);
+        Pacd=atof(argv[10]);
+        Pba=atof(argv[11]);
+        Pbc=atof(argv[12]);
+        Pbd=atof(argv[13]);
+        Win[0] = atoi(argv[14]);
+        Win[1] = atoi(argv[15]);
 
         // Enforce bounds on input variables
         if (n_plants>=MAX_PLANTS) n_plants=MAX_PLANTS;
@@ -777,10 +998,11 @@ int main(int argc, char** argv)
         if (Z_angle>360) Z_angle=360;
         if (scale_mult<.75) scale_mult=.75;
         if (scale_mult>.99) scale_mult=.99;
-	Paab=Paab/(Paab+Paac+Paad+Pacd);
-	Paac=Paac/(Paab+Paac+Paad+Pacd);
-	Paad=Paad/(Paab+Paac+Paad+Pacd);
-	Pacd=Pacd/(Paab+Paac+Paad+Pacd);
+        Paaa=Paaa/(Paaa+Paab+Paac+Paad+Pacd);
+      	Paab=Paab/(Paab+Paac+Paad+Pacd);
+      	Paac=Paac/(Paab+Paac+Paad+Pacd);
+      	Paad=Paad/(Paab+Paac+Paad+Pacd);
+      	Pacd=Pacd/(Paab+Paac+Paad+Pacd);
         Pba=Pba/(Pba+Pbc+Pbd);
         Pbc=Pbc/(Pba+Pbc+Pbd);
         Pbd=Pbd/(Pba+Pbc+Pbd);
@@ -804,12 +1026,12 @@ int main(int argc, char** argv)
         //           submit your texture images along
         //           with your completed code.
         ////////////////////////////////////////////////
-	textures_on=0;		// Set to 1 to enable texturing
+        textures_on=0;		// Set to 1 to enable texturing
         if (textures_on)
         {
-	 leaf_texture=readPPM("leaf_texture_image.ppm",&l_sx,&l_sy);	// Evidently, you must change this to be
+	         leaf_texture=readPPM("leaf_texture_image.ppm",&l_sx,&l_sy);	// Evidently, you must change this to be
 									// your leaf texture image in .ppm format!
-	 petal_texture=readPPM("petal_texture_image.ppm",&p_sx,&p_sy);	// Similarly, set this to be your petal
+	         petal_texture=readPPM("petal_texture_image.ppm",&p_sx,&p_sy);	// Similarly, set this to be your petal
 									// texture image.
          if (!leaf_texture||!petal_texture)
          {
@@ -833,14 +1055,34 @@ int main(int argc, char** argv)
     MakeSurfaceGrid();
 
     // Make a plant forest!
-    for (int i=0;i<n_plants;i++)
-     PlantForest[i]=MakePlant();
-
+    for (int i=0;i<n_plants;i++){
+      PlantForest[i]=MakePlant();
     //////////////////////////////////////////////////////////////
     // TO DO: Set the locations of the plants in the plant forest
     //        randomly in X,Y, but at the correct height for
     //        the corresponding location in the surface grid.
     //////////////////////////////////////////////////////////////
+
+      
+      int x = rand() % GRID_RESOLVE;
+      int y = rand() % GRID_RESOLVE;
+
+      // Use plant_loc to see if randomized location is occupied
+      while (plants_loc[x][y] == 1){
+        x = rand() % GRID_RESOLVE;
+        y = rand() % GRID_RESOLVE;        
+      }
+
+
+      ForestXYZ[i][0] = GroundXYZ[x][y][0];
+      ForestXYZ[i][1] = GroundXYZ[x][y][1];
+      ForestXYZ[i][2] = GroundXYZ[x][y][2];
+      //update the array when the location is filled.
+      plants_loc[x][y] = 1;
+    }
+
+
+
 
     // Intialize global transformation variables and GLUI    
     global_Z=0;
@@ -951,8 +1193,13 @@ void setupUI()
     //        global_scale must be in [0, 20]
     ///////////////////////////////////////////////////////////
 
+    
+    
+
     ImGui::SetWindowFocus();
         ImGui::ColorEdit3("clear color", (float*)&clear_color);
+        ImGui::SliderFloat("Rotate Z-axis", &global_Z, -180, 180);
+        ImGui::SliderFloat("Scaling", &global_scale, 0,20);
 
     // Add "Quit" button
     if(ImGui::Button("Quit")) {
@@ -1012,7 +1259,7 @@ void WindowDisplay(void)
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     // Setup the model-view transformation matrix
     glMatrixMode(GL_MODELVIEW);
-    glLoadIdentity();
+    glLoadIdentity();    
 
     glClearDepth(1);
     glEnable(GL_DEPTH_TEST);    // Enable depth testing
